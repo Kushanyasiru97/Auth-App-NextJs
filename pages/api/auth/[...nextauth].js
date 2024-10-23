@@ -1,6 +1,5 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-
 import { verifyPassword } from '../../../lib/auth';
 import { connectToDatabase } from '../../../lib/db';
 
@@ -17,7 +16,6 @@ export default NextAuth({
       },
       async authorize(credentials) {
         const client = await connectToDatabase();
-
         const usersCollection = client.db().collection('users');
 
         const user = await usersCollection.findOne({
@@ -29,10 +27,7 @@ export default NextAuth({
           throw new Error('No user found!');
         }
 
-        const isValid = await verifyPassword(
-          credentials.password,
-          user.password
-        );
+        const isValid = await verifyPassword(credentials.password, user.password);
 
         if (!isValid) {
           client.close();
@@ -40,11 +35,28 @@ export default NextAuth({
         }
 
         client.close();
-        return { email: user.email };
+        return { email: user.email, id: user._id }; // Include user ID if needed
       },
     }),
   ],
   pages: {
-    signIn: '/auth/signin', // Replace with your custom sign-in page if needed
+    signIn: '/auth/signin', // Optional: Custom sign-in page
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      // When user logs in, add user info to the token
+      if (user) {
+        token.id = user.id; // Add user ID to the token
+        token.email = user.email; // Add user email to the token
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      // Pass token info to the session
+      session.user.id = token.id;
+      session.user.email = token.email;
+      session.token = token; // Attach the token to the session
+      return session;
+    },
   },
 });
